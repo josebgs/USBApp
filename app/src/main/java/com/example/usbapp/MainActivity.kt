@@ -1,6 +1,5 @@
 package com.example.usbapp
 
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -9,12 +8,10 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
-import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
-import androidx.annotation.RequiresApi
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -26,6 +23,7 @@ import com.example.usbapp.databinding.ActivityMainBinding
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.File
 
 private const val ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION"
 private const val TAG = "MainActivity"
@@ -39,6 +37,7 @@ class MainActivity : AppCompatActivity() {
     private val forceClaim = true
     private var connection: UsbDeviceConnection? = null
     private var intf: UsbInterface? = null
+    private var usbManager: UsbManager? = null
     private val mainViewModel: MainViewModel by lazy{
         ViewModelProvider(this@MainActivity).get(MainViewModel::class.java)
     }
@@ -70,11 +69,15 @@ class MainActivity : AppCompatActivity() {
 
         registerReceiver(usbReceiver, IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED))
 
-        val usbManager = getSystemService(Context.USB_SERVICE) as UsbManager?
+    }
+
+    override fun onResume() {
+        super.onResume()
+        usbManager = getSystemService(Context.USB_SERVICE) as UsbManager?
         val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-
         device?.apply {
-
+            Toast.makeText(this@MainActivity, "I'm going to move images to internal storage", Toast.LENGTH_SHORT).show()
+            bytes =  "hello world".toByteArray()
             device.getInterface(0).also { interf ->
                 intf = interf
                 intf?.getEndpoint(0)?.also { endpoint ->
@@ -88,7 +91,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         // Inflate the menu; this adds items to the action bar if it is present.
         menuInflater.inflate(R.menu.menu_main, menu)
