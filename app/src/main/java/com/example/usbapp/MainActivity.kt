@@ -16,12 +16,16 @@ import android.view.Menu
 import android.view.MenuItem
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
 import androidx.navigation.ui.setupActionBarWithNavController
 import com.example.usbapp.databinding.ActivityMainBinding
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 private const val ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION"
 private const val TAG = "MainActivity"
@@ -35,6 +39,9 @@ class MainActivity : AppCompatActivity() {
     private val forceClaim = true
     private var connection: UsbDeviceConnection? = null
     private var intf: UsbInterface? = null
+    private val mainViewModel: MainViewModel by lazy{
+        ViewModelProvider(this@MainActivity).get(MainViewModel::class.java)
+    }
 
     var usbReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -73,7 +80,9 @@ class MainActivity : AppCompatActivity() {
                 intf?.getEndpoint(0)?.also { endpoint ->
                     usbManager?.openDevice(device)?.apply {
                         claimInterface(intf, forceClaim)
-                        //bulkTransfer(endpoint, bytes, bytes.size, TIMEOUT) //do in another thread
+                        mainViewModel.viewModelScope.launch(Dispatchers.IO){
+                            bulkTransfer(endpoint, bytes, bytes.size, TIMEOUT) //do in another thread
+                        }
                     }
                 }
             }
