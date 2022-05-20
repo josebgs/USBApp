@@ -9,12 +9,14 @@ import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import android.os.Bundle
+import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.Button
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.coroutineScope
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
@@ -23,7 +25,8 @@ import com.example.usbapp.databinding.ActivityMainBinding
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.io.File
+import me.jahnen.libaums.core.UsbMassStorageDevice
+import me.jahnen.libaums.core.fs.UsbFileOutputStream
 
 private const val ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION"
 private const val TAG = "MainActivity"
@@ -38,10 +41,7 @@ class MainActivity : AppCompatActivity() {
     private var connection: UsbDeviceConnection? = null
     private var intf: UsbInterface? = null
     private var usbManager: UsbManager? = null
-    private val mainViewModel: MainViewModel by lazy{
-        ViewModelProvider(this@MainActivity).get(MainViewModel::class.java)
-    }
-
+    private lateinit var saveButton: Button
     var usbReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
 
@@ -62,35 +62,43 @@ class MainActivity : AppCompatActivity() {
         appBarConfiguration = AppBarConfiguration(navController.graph)
         setupActionBarWithNavController(navController, appBarConfiguration)
 
-        binding.fab.setOnClickListener { view ->
-            Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                .setAction("Action", null).show()
+        binding.saveButton.setOnClickListener { view ->
+            Toast.makeText(this@MainActivity, "We're going to move images to internal storage now.", Toast.LENGTH_SHORT).show()
+            val usb: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+            usb?.apply {
+                val devices = UsbMassStorageDevice.getMassStorageDevices(this@MainActivity /* Context or Activity */)
+                val device = devices[0]
+                // before interacting with a device you need to call init()!
+                device.init()
+                // Only uses the first partition on the device
+                val currentFs = device.partitions[0].fileSystem
+                Log.d(TAG, "Capacity: " + currentFs.capacity)
+                Log.d(TAG, "Occupied Space: " + currentFs.occupiedSpace)
+                Log.d(TAG, "Free Space: " + currentFs.freeSpace)
+                Log.d(TAG, "Chunk size: " + currentFs.chunkSize)
+                val root = currentFs.rootDirectory
+
+                val files = root.listFiles()
+                for (file in files) {
+                    Log.d(TAG, file.name)
+                }
+                lifecycle.coroutineScope.launch(Dispatchers.IO){
+                    val newDir = root.createDirectory(binding.toAddress.text.toString())
+                    val file = newDir.createFile("bar.txt")
+                    // write to a file
+                    val os = UsbFileOutputStream(file)
+                    os.write("hello".toByteArray())
+                    os.close()
+                    device.close()
+                }
+            }
         }
 
         registerReceiver(usbReceiver, IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED))
 
     }
 
-    override fun onResume() {
-        super.onResume()
-        usbManager = getSystemService(Context.USB_SERVICE) as UsbManager?
-        val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-        device?.apply {
-            Toast.makeText(this@MainActivity, "I'm going to move images to internal storage", Toast.LENGTH_SHORT).show()
-            bytes =  "hello world".toByteArray()
-            device.getInterface(0).also { interf ->
-                intf = interf
-                intf?.getEndpoint(0)?.also { endpoint ->
-                    usbManager?.openDevice(device)?.apply {
-                        claimInterface(intf, forceClaim)
-                        mainViewModel.viewModelScope.launch(Dispatchers.IO){
-                            bulkTransfer(endpoint, bytes, bytes.size, TIMEOUT) //do in another thread
-                        }
-                    }
-                }
-            }
-        }
-    }
+
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         // Inflate the menu; this adds items to the action bar if it is present.
         menuInflater.inflate(R.menu.menu_main, menu)
